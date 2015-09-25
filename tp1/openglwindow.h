@@ -41,6 +41,7 @@
 #include <QtGui/QWindow>
 #include <QtGui/QOpenGLFunctions>
 
+
 QT_BEGIN_NAMESPACE
 class QPainter;
 class QOpenGLContext;

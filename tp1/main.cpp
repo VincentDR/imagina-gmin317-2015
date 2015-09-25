@@ -47,12 +47,34 @@
 
 #include <QtCore/qmath.h>
 
+#include <iostream>
+#include "Point.h"
+#include "Face.h"
+#include "Camera.h"
+
+
+
+//Pour l'exo1, la dimension est le nombre de pixel par côté
+//Le reste me sert pour déterminer les tailles de mes tableaux, ecartsPoints pour représenter l'écart entre deux points (eh oui)
+int dimension = 5;
+int nbSommets = dimension * dimension;
+int nbFaces = sqrt(nbSommets - 1) * sqrt(nbSommets - 1) * 2;
+Face * faces;
+GLfloat ecartPoints = 1.0f;
+
+Camera * cam;
+
+QMouseEvent *souris;
+QKeyEvent *clavier;
+
 //! [1]
 class TriangleWindow : public OpenGLWindow
 {
 public:
     TriangleWindow();
-
+    void keyPressEvent(QKeyEvent * event);
+    void mouseMoveEvent(QMouseEvent * event);
+    void heightMap();
     void initialize() Q_DECL_OVERRIDE;
     void render() Q_DECL_OVERRIDE;
 
@@ -73,19 +95,88 @@ TriangleWindow::TriangleWindow()
 {
 }
 //! [1]
+void exo1(){
+    //Ajouts
+    //Tableau de Points (classe perso) permettant par la suite de remplir un tableau
+    Point * points = (Point *) malloc(sizeof(Point) * nbSommets);
+
+    GLfloat x = 0.0f;
+    GLfloat y = 0.0f;
+    GLfloat z = 0.0f;
+    for(int i = 0; i < nbSommets; i++){
+        if(i%(int)sqrt(nbSommets) == 0 && i!=0){
+            x = 0.0f;
+            y -= ecartPoints;
+        }
+        GLfloat r = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+        z = r/100;
+
+        points[i] = Point();
+        points[i].setCoords(x,y,z);
+        //qDebug()<<"Point "<<i<<" : "<<x<<" "<<y<<" "<<z;
+
+        x += ecartPoints;
+
+    }
+
+
+    //Tableau de triangle
+    faces = (Face *)malloc(sizeof(Face) * nbFaces);
+    for(int i = 0; i < nbFaces; i++){
+        faces[i] = Face(3);
+    }
+    //Ces indices représentent chaque carré que l'on va traiter à la suite
+    int un = 0;
+    int deux = 1;
+    int trois = (int)sqrt(nbSommets);
+    int quatre = trois + 1;
+
+    //On ne traite que les carrés, donc deux triangles à la fois
+    for(int i = 0; i < ((int)sqrt(nbSommets) - 1)*((int)sqrt(nbSommets) - 1); i++){
+        if(i%((int)sqrt(nbSommets) - 1) == 0 && i!=0){//On descend d'une ligne
+            un++;
+            deux++;
+            trois++;
+            quatre++;
+        }
+
+        faces[i*2].setSommetFace(0, points[un]);
+        faces[i*2].setSommetFace(1, points[deux]);
+        faces[i*2].setSommetFace(2, points[trois]);
+        faces[i*2].setCoords();//Pour récuperer un GLfloat*
+        //qDebug()<<"Triangle "<<i*2<<" : "<<un<<" "<<deux<<" "<<trois<<" "<<quatre;
+        faces[i*2 + 1].setSommetFace(0, points[deux]);
+        faces[i*2 + 1].setSommetFace(1, points[quatre]);
+        faces[i*2 + 1].setSommetFace(2, points[trois]);
+        faces[i*2 + 1].setCoords();
+
+        un++;
+        deux++;
+        trois++;
+        quatre++;
+    }
+    //Fin Ajouts
+}
+
 
 //! [2]
 int main(int argc, char **argv)
 {
+
     QGuiApplication app(argc, argv);
 
     QSurfaceFormat format;
     format.setSamples(16);
 
+    cam = new Camera({-6,0,2});
+
+    //exo1();
+
     TriangleWindow window;
     window.setFormat(format);
     window.resize(640, 480);
     window.show();
+    window.heightMap();
 
     window.setAnimating(true);
 
@@ -133,6 +224,85 @@ void TriangleWindow::initialize()
 }
 //! [4]
 
+//Ajouts
+//TEST EVENTS
+void TriangleWindow::keyPressEvent(QKeyEvent * event){
+    cam->onKeyboard(*event);
+}
+void TriangleWindow::mouseMoveEvent(QMouseEvent * event){
+    cam->onMouseMotion(*event);
+}
+
+
+//TEST MAP
+void TriangleWindow::heightMap(){
+    QImage map = QImage("heightmap-1.png");
+
+    int dimX = map.width();
+    int dimZ = map.height();
+    int tailleMap = dimZ * dimX;
+
+
+    Point * points = (Point *) malloc(sizeof(Point) * tailleMap);
+    ecartPoints = 5.0f;
+    for(int z = 0; z < dimZ; z++)
+    {
+        for(int x = 0; x < dimX; x++)
+        {
+            QRgb color = map.pixel(x, z);
+
+            GLfloat tempX = (ecartPoints * x / dimX) - ecartPoints / 2;
+            GLfloat tempZ =  2.0 * qGray(color) / 255;
+            GLfloat tempY = (ecartPoints * z / dimZ) - ecartPoints / 2;
+            //qDebug()<<"Je suis à "<<z + dimZ * x<<" et qGray(color) "<<qGray(color);
+            points[z + dimZ * x] = Point();
+            points[z + dimZ * x].setCoords(tempX, tempY, tempZ);
+           }
+    }
+
+    //Tableau de triangle
+    nbSommets = tailleMap;
+    nbFaces = sqrt(nbSommets - 1) * sqrt(nbSommets - 1) * 2;
+
+    //qDebug()<<"Le nombre de face est de "<<nbFaces;
+
+
+    faces = (Face *)malloc(sizeof(Face) * nbFaces);
+    for(int i = 0; i < nbFaces; i++){
+        faces[i] = Face(3);
+    }
+
+    int un = 0;
+    int deux = 1;
+    int trois = (int)sqrt(nbSommets);
+    int quatre = trois + 1;
+
+    //On ne traite que les carrés, donc deux triangles à la fois
+    for(int i = 0; i < ((int)sqrt(nbSommets) - 1)*((int)sqrt(nbSommets) - 1); i++){
+        if(i%((int)sqrt(nbSommets) - 1) == 0 && i!=0){//On descend d'une ligne
+            un++;
+            deux++;
+            trois++;
+            quatre++;
+        }
+
+        faces[i*2].setSommetFace(0, points[un]);
+        faces[i*2].setSommetFace(1, points[deux]);
+        faces[i*2].setSommetFace(2, points[trois]);
+        faces[i*2].setCoords();//Pour récuperer un GLfloat*
+        //qDebug()<<"Triangle "<<i*2<<" : "<<un<<" "<<deux<<" "<<trois<<" "<<quatre;
+        faces[i*2 + 1].setSommetFace(0, points[deux]);
+        faces[i*2 + 1].setSommetFace(1, points[quatre]);
+        faces[i*2 + 1].setSommetFace(2, points[trois]);
+        faces[i*2 + 1].setCoords();
+
+        un++;
+        deux++;
+        trois++;
+        quatre++;
+    }
+}//Fin Ajouts
+
 //! [5]
 void TriangleWindow::render()
 {
@@ -144,14 +314,17 @@ void TriangleWindow::render()
     m_program->bind();
 
     QMatrix4x4 matrix;
-    matrix.perspective(60.0f, 16.0f/9.0f, 0.1f, 100.0f);
-    matrix.translate(0, 0, -2);
-    matrix.rotate(100.0f * m_frame / screen()->refreshRate(), 0, 1, 0);
+    matrix.perspective(45.0f, 4.0f/3.0f, 0.1f, 100.0f);
+    //matrix.translate(0, 0, -2);
+   // matrix.rotate(100.0f * m_frame / screen()->refreshRate(), 0, 1, 0);
+
+    cam->look(matrix);
 
     m_program->setUniformValue(m_matrixUniform, matrix);
 
+/*
     GLfloat vertices[] = {
-        0.0f, 0.707f,
+        0.707f, 0.0f,
         -0.5f, -0.5f,
         0.5f, -0.5f
     };
@@ -160,18 +333,38 @@ void TriangleWindow::render()
         1.0f, 0.0f, 1.0f,
         1.0f, 1.0f, 0.0f,
         0.0f, 1.0f, 1.0f
-    };
+    };*/
 
-    glVertexAttribPointer(m_posAttr, 2, GL_FLOAT, GL_FALSE, 0, vertices);
-    glVertexAttribPointer(m_colAttr, 3, GL_FLOAT, GL_FALSE, 0, colors);
+    //On récupére le min et max des hauteurs pour la montagne
+    GLfloat min = 30000.0f;
+    GLfloat max = -30000.0f;
+    for(int i = 0 ; i < nbFaces; i++){
+        if(faces[i].moyCoord(2)> max){
+            max = faces[i].moyCoord(2);
+        }else if(faces[i].moyCoord(2)< min){
+            min = faces[i].moyCoord(2);
+        }
+    }
 
-    glEnableVertexAttribArray(0);
-    glEnableVertexAttribArray(1);
 
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+    for(int i = 0 ; i < nbFaces; i++){
+        glVertexAttribPointer(m_posAttr, 3, GL_FLOAT, GL_FALSE, 0, faces[i].getCoords());
+        GLfloat col = faces[i].moyCoord(2) / max;
+        GLfloat colors[] = {
+                col, col, col,
+                col, col, col,
+                col, col, col
+            };
+        glVertexAttribPointer(m_colAttr, 3, GL_FLOAT, GL_FALSE, 0, colors);
 
-    glDisableVertexAttribArray(1);
-    glDisableVertexAttribArray(0);
+        glEnableVertexAttribArray(0);
+        glEnableVertexAttribArray(1);
+
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+
+        glDisableVertexAttribArray(1);
+        glDisableVertexAttribArray(0);
+    }
 
     m_program->release();
 
